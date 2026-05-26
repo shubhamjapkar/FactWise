@@ -13,7 +13,7 @@ import {
   type ValueFormatterParams,
 } from "ag-grid-community";
 
-import { products, type Product, type ProductStatus } from "../data/products";
+import { employees, type Employee } from "../data/employees";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -34,7 +34,7 @@ const theme = themeQuartz.withPart(colorSchemeDarkBlue).withParams({
 const currencyFmt = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
-  maximumFractionDigits: 2,
+  maximumFractionDigits: 0,
 });
 
 const dateFmt = new Intl.DateTimeFormat("en-US", {
@@ -43,18 +43,50 @@ const dateFmt = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
 });
 
-const STATUS_STYLES: Record<ProductStatus, { bg: string; fg: string; dot: string }> = {
-  "In Stock": { bg: "bg-emerald-500/10", fg: "text-emerald-300", dot: "bg-emerald-400" },
-  "Low Stock": { bg: "bg-amber-500/10", fg: "text-amber-300", dot: "bg-amber-400" },
-  "Out of Stock": { bg: "bg-rose-500/10", fg: "text-rose-300", dot: "bg-rose-400" },
-  Discontinued: { bg: "bg-zinc-500/10", fg: "text-zinc-300", dot: "bg-zinc-400" },
+type Department = Employee["department"];
+
+const DEPT_STYLES: Record<Department, { bg: string; fg: string; ring: string; avatar: string }> = {
+  Engineering: { bg: "bg-sky-500/10", fg: "text-sky-300", ring: "ring-sky-500/30", avatar: "from-sky-500/60 to-sky-700/60" },
+  Marketing: { bg: "bg-violet-500/10", fg: "text-violet-300", ring: "ring-violet-500/30", avatar: "from-violet-500/60 to-fuchsia-700/60" },
+  Sales: { bg: "bg-emerald-500/10", fg: "text-emerald-300", ring: "ring-emerald-500/30", avatar: "from-emerald-500/60 to-teal-700/60" },
+  HR: { bg: "bg-amber-500/10", fg: "text-amber-300", ring: "ring-amber-500/30", avatar: "from-amber-500/60 to-orange-700/60" },
+  Finance: { bg: "bg-rose-500/10", fg: "text-rose-300", ring: "ring-rose-500/30", avatar: "from-rose-500/60 to-pink-700/60" },
 };
 
-function StatusPill({ value }: { value: ProductStatus }) {
-  const s = STATUS_STYLES[value];
+function initialsOf(first: string, last: string) {
+  return `${first[0] ?? ""}${last[0] ?? ""}`.toUpperCase();
+}
+
+function tenureYears(hireDate: string, today = new Date()) {
+  const hire = new Date(hireDate);
+  const ms = today.getTime() - hire.getTime();
+  return ms / (1000 * 60 * 60 * 24 * 365.25);
+}
+
+function EmployeeCell({ data }: { data: Employee }) {
+  const s = DEPT_STYLES[data.department];
+  return (
+    <div className="flex items-center gap-3 py-1">
+      <div
+        className={`grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br ${s.avatar} text-xs font-semibold text-white ring-1 ${s.ring}`}
+      >
+        {initialsOf(data.firstName, data.lastName)}
+      </div>
+      <div className="flex flex-col leading-tight">
+        <span className="text-zinc-100 font-medium">
+          {data.firstName} {data.lastName}
+        </span>
+        <span className="text-xs text-zinc-500">{data.email}</span>
+      </div>
+    </div>
+  );
+}
+
+function DepartmentPill({ value }: { value: Department }) {
+  const s = DEPT_STYLES[value];
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${s.bg} ${s.fg}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
+      <span className={`h-1.5 w-1.5 rounded-full bg-current opacity-80`} />
       {value}
     </span>
   );
@@ -68,136 +100,189 @@ function RatingCell({ value }: { value: number }) {
         {"★".repeat(full)}
         <span className="text-zinc-600">{"★".repeat(5 - full)}</span>
       </span>
-      <span className="text-zinc-400 text-xs">{value.toFixed(1)}</span>
+      <span className="text-zinc-400 text-xs tabular-nums">{value.toFixed(1)}</span>
     </span>
   );
 }
 
-function MarginCell({ value }: { value: number }) {
-  const pct = value * 100;
-  const tone =
-    pct >= 55 ? "text-emerald-300" : pct >= 40 ? "text-sky-300" : pct >= 25 ? "text-amber-300" : "text-rose-300";
-  return <span className={`font-medium ${tone}`}>{pct.toFixed(1)}%</span>;
-}
-
-function StockCell({ value }: { value: number }) {
-  const max = 420;
+function ProjectsCell({ value }: { value: number }) {
+  const max = 25;
   const pct = Math.min(100, (value / max) * 100);
-  const barColor = value === 0 ? "bg-rose-500/70" : value < 25 ? "bg-amber-400/80" : "bg-sky-400/80";
+  const barColor = value >= 15 ? "bg-emerald-400/80" : value >= 8 ? "bg-sky-400/80" : "bg-amber-400/80";
   return (
     <div className="flex items-center gap-3 w-full">
       <div className="h-1.5 flex-1 rounded-full bg-zinc-800 overflow-hidden">
         <div className={`h-full ${barColor}`} style={{ width: `${pct}%` }} />
       </div>
-      <span className="tabular-nums text-zinc-300 text-xs w-10 text-right">{value}</span>
+      <span className="tabular-nums text-zinc-300 text-xs w-6 text-right">{value}</span>
     </div>
   );
 }
 
-type Row = Product & { margin: number };
+function SkillsCell({ value }: { value: string[] }) {
+  if (!value?.length) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-1 py-1">
+      {value.slice(0, 3).map((skill) => (
+        <span key={skill} className="rounded-md bg-zinc-800/80 px-2 py-0.5 text-xs text-zinc-300">
+          {skill}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function StatusPill({ value }: { value: boolean }) {
+  const cls = value
+    ? "bg-emerald-500/10 text-emerald-300"
+    : "bg-zinc-500/10 text-zinc-400";
+  const dot = value ? "bg-emerald-400" : "bg-zinc-500";
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${cls}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
+      {value ? "Active" : "Inactive"}
+    </span>
+  );
+}
+
+type Row = Employee & { tenure: number; fullName: string };
 
 export default function Dashboard() {
   const gridRef = useRef<AgGridReact<Row>>(null);
   const [quickFilter, setQuickFilter] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<string>("All");
+  const [deptFilter, setDeptFilter] = useState<"All" | Department>("All");
 
   const rowData = useMemo<Row[]>(
-    () => products.map((p) => ({ ...p, margin: (p.price - p.cost) / p.price })),
+    () =>
+      employees.map((e) => ({
+        ...e,
+        tenure: tenureYears(e.hireDate),
+        fullName: `${e.firstName} ${e.lastName}`,
+      })),
     []
   );
 
-  const categories = useMemo(
-    () => ["All", ...Array.from(new Set(products.map((p) => p.category))).sort()],
+  const departments = useMemo<Array<"All" | Department>>(
+    () => ["All", ...(Array.from(new Set(employees.map((e) => e.department))).sort() as Department[])],
     []
   );
 
   const filteredData = useMemo(
-    () => (categoryFilter === "All" ? rowData : rowData.filter((r) => r.category === categoryFilter)),
-    [rowData, categoryFilter]
+    () => (deptFilter === "All" ? rowData : rowData.filter((r) => r.department === deptFilter)),
+    [rowData, deptFilter]
   );
 
   const stats = useMemo(() => {
-    const totalValue = rowData.reduce((sum, r) => sum + r.price * r.stock, 0);
-    const lowStock = rowData.filter((r) => r.status === "Low Stock" || r.status === "Out of Stock").length;
-    const avgRating = rowData.reduce((s, r) => s + r.rating, 0) / rowData.length;
-    const totalUnits = rowData.reduce((s, r) => s + r.stock, 0);
-    return { totalValue, lowStock, avgRating, totalUnits, count: rowData.length };
+    const totalPayroll = rowData.reduce((s, r) => s + r.salary, 0);
+    const activeCount = rowData.filter((r) => r.isActive).length;
+    const avgRating = rowData.reduce((s, r) => s + r.performanceRating, 0) / rowData.length;
+    const departments = new Set(rowData.map((r) => r.department)).size;
+    return { totalPayroll, activeCount, avgRating, departments, count: rowData.length };
   }, [rowData]);
 
   const columnDefs = useMemo<ColDef<Row>[]>(
     () => [
       {
-        field: "sku",
-        headerName: "SKU",
-        width: 120,
+        field: "id",
+        headerName: "ID",
+        width: 80,
         pinned: "left",
         cellClass: "font-mono text-xs text-zinc-400",
       },
       {
-        field: "name",
-        headerName: "Product",
-        flex: 1.6,
-        minWidth: 220,
-        cellRenderer: (p: ICellRendererParams<Row>) => (
-          <div className="flex flex-col leading-tight py-1">
-            <span className="text-zinc-100 font-medium">{p.value}</span>
-            <span className="text-xs text-zinc-500">{p.data?.supplier}</span>
-          </div>
-        ),
+        field: "fullName",
+        headerName: "Employee",
+        flex: 1.8,
+        minWidth: 250,
+        pinned: "left",
+        cellRenderer: (p: ICellRendererParams<Row>) =>
+          p.data ? <EmployeeCell data={p.data} /> : null,
       },
       {
-        field: "category",
-        headerName: "Category",
+        field: "department",
+        headerName: "Department",
+        width: 140,
+        cellRenderer: (p: ICellRendererParams<Row, Department>) =>
+          p.value ? <DepartmentPill value={p.value} /> : null,
+      },
+      {
+        field: "position",
+        headerName: "Position",
+        flex: 1.1,
+        minWidth: 180,
+        cellClass: "text-zinc-200",
+      },
+      {
+        field: "location",
+        headerName: "Location",
         width: 130,
-        cellRenderer: (p: ICellRendererParams<Row>) => (
-          <span className="rounded-md bg-zinc-800/60 px-2 py-0.5 text-xs text-zinc-300">{p.value}</span>
-        ),
+        cellClass: "text-zinc-300",
       },
       {
-        field: "price",
-        headerName: "Price",
+        field: "salary",
+        headerName: "Salary",
         width: 110,
         type: "numericColumn",
         valueFormatter: (p: ValueFormatterParams<Row, number>) =>
           p.value == null ? "" : currencyFmt.format(p.value),
-        cellClass: "tabular-nums",
+        cellClass: "tabular-nums text-zinc-100 font-medium",
       },
       {
-        field: "margin",
-        headerName: "Margin",
-        width: 110,
-        type: "numericColumn",
-        cellRenderer: (p: ICellRendererParams<Row, number>) =>
-          p.value == null ? null : <MarginCell value={p.value} />,
-      },
-      {
-        field: "stock",
-        headerName: "Stock",
-        width: 180,
-        cellRenderer: (p: ICellRendererParams<Row, number>) =>
-          p.value == null ? null : <StockCell value={p.value} />,
-      },
-      {
-        field: "rating",
-        headerName: "Rating",
-        width: 140,
+        field: "performanceRating",
+        headerName: "Performance",
+        width: 150,
         cellRenderer: (p: ICellRendererParams<Row, number>) =>
           p.value == null ? null : <RatingCell value={p.value} />,
       },
       {
-        field: "status",
-        headerName: "Status",
+        field: "projectsCompleted",
+        headerName: "Projects",
         width: 150,
-        cellRenderer: (p: ICellRendererParams<Row, ProductStatus>) =>
-          p.value ? <StatusPill value={p.value} /> : null,
+        cellRenderer: (p: ICellRendererParams<Row, number>) =>
+          p.value == null ? null : <ProjectsCell value={p.value} />,
       },
       {
-        field: "lastRestocked",
-        headerName: "Last Restocked",
-        width: 150,
+        field: "skills",
+        headerName: "Skills",
+        flex: 1.4,
+        minWidth: 240,
+        sortable: false,
+        cellRenderer: (p: ICellRendererParams<Row, string[]>) =>
+          p.value ? <SkillsCell value={p.value} /> : null,
+      },
+      {
+        field: "tenure",
+        headerName: "Tenure",
+        width: 110,
+        valueFormatter: (p: ValueFormatterParams<Row, number>) =>
+          p.value == null ? "" : `${p.value.toFixed(1)} yrs`,
+        cellClass: "tabular-nums text-zinc-300",
+      },
+      {
+        field: "hireDate",
+        headerName: "Hire Date",
+        width: 140,
         valueFormatter: (p: ValueFormatterParams<Row, string>) =>
           p.value ? dateFmt.format(new Date(p.value)) : "",
         cellClass: "text-zinc-300",
+      },
+      {
+        field: "manager",
+        headerName: "Manager",
+        width: 160,
+        cellRenderer: (p: ICellRendererParams<Row, string | null>) =>
+          p.value ? (
+            <span className="text-zinc-300">{p.value}</span>
+          ) : (
+            <span className="text-zinc-600 italic">—</span>
+          ),
+      },
+      {
+        field: "isActive",
+        headerName: "Status",
+        width: 130,
+        cellRenderer: (p: ICellRendererParams<Row, boolean>) =>
+          p.value == null ? null : <StatusPill value={p.value} />,
       },
     ],
     []
@@ -223,9 +308,9 @@ export default function Dashboard() {
         <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-widest text-sky-400/80">Factwise Dashboard</p>
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight">Product Inventory</h1>
+            <h1 className="mt-1 text-3xl font-semibold tracking-tight">Employee Directory</h1>
             <p className="mt-1 text-sm text-zinc-400">
-              Live view of catalog stock, margins, and supplier performance.
+              Live snapshot of headcount, compensation, and performance across the organization.
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs text-zinc-500">
@@ -235,23 +320,28 @@ export default function Dashboard() {
         </header>
 
         <section className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
-          <StatCard label="Products" value={stats.count.toString()} hint="In catalog" tone="sky" />
           <StatCard
-            label="Inventory Value"
-            value={currencyFmt.format(stats.totalValue)}
-            hint={`${stats.totalUnits.toLocaleString()} units on hand`}
+            label="Headcount"
+            value={stats.count.toString()}
+            hint={`${stats.activeCount} active`}
+            tone="sky"
+          />
+          <StatCard
+            label="Total Payroll"
+            value={currencyFmt.format(stats.totalPayroll)}
+            hint="Annualized"
             tone="emerald"
           />
           <StatCard
-            label="Needs Attention"
-            value={stats.lowStock.toString()}
-            hint="Low or out of stock"
+            label="Avg. Performance"
+            value={stats.avgRating.toFixed(2)}
+            hint="Out of 5.0"
             tone="amber"
           />
           <StatCard
-            label="Avg. Rating"
-            value={stats.avgRating.toFixed(2)}
-            hint="Across all products"
+            label="Departments"
+            value={stats.departments.toString()}
+            hint="Active teams"
             tone="violet"
           />
         </section>
@@ -259,38 +349,38 @@ export default function Dashboard() {
         <section className="rounded-2xl border border-zinc-800/80 bg-[#0b1220] shadow-2xl shadow-black/40">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800/80 px-5 py-4">
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold text-zinc-200">Catalog</h2>
+              <h2 className="text-sm font-semibold text-zinc-200">All Employees</h2>
               <span className="rounded-full bg-zinc-800/80 px-2 py-0.5 text-xs text-zinc-400">
-                {filteredData.length} rows
+                {filteredData.length} {filteredData.length === 1 ? "record" : "records"}
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-900/60 p-1">
-                {categories.map((c) => (
+                {departments.map((d) => (
                   <button
-                    key={c}
-                    onClick={() => setCategoryFilter(c)}
+                    key={d}
+                    onClick={() => setDeptFilter(d)}
                     className={`rounded-md px-2.5 py-1 text-xs transition-colors ${
-                      categoryFilter === c
+                      deptFilter === d
                         ? "bg-sky-500/15 text-sky-300"
                         : "text-zinc-400 hover:text-zinc-200"
                     }`}
                   >
-                    {c}
+                    {d}
                   </button>
                 ))}
               </div>
               <input
                 value={quickFilter}
                 onChange={(e) => setQuickFilter(e.target.value)}
-                placeholder="Search products…"
-                className="w-56 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-sm text-zinc-200 placeholder:text-zinc-500 focus:border-sky-500/60 focus:outline-none focus:ring-1 focus:ring-sky-500/40"
+                placeholder="Search name, skill, location…"
+                className="w-64 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-sm text-zinc-200 placeholder:text-zinc-500 focus:border-sky-500/60 focus:outline-none focus:ring-1 focus:ring-sky-500/40"
               />
             </div>
           </div>
 
           <div className="p-3">
-            <div style={{ height: 560, width: "100%" }}>
+            <div style={{ height: 620, width: "100%" }}>
               <AgGridReact<Row>
                 ref={gridRef}
                 theme={theme}
@@ -299,7 +389,7 @@ export default function Dashboard() {
                 defaultColDef={defaultColDef}
                 quickFilterText={quickFilter}
                 animateRows
-                rowHeight={52}
+                rowHeight={56}
                 headerHeight={44}
                 onGridReady={onGridReady}
               />
@@ -308,7 +398,7 @@ export default function Dashboard() {
         </section>
 
         <footer className="mt-6 text-center text-xs text-zinc-600">
-          Built with AG Grid {`v35`} · Client-side rendering · {products.length} sample records
+          Built with AG Grid v35 · Client-side rendering · {employees.length} sample records
         </footer>
       </div>
     </div>
@@ -319,10 +409,10 @@ type Tone = "sky" | "emerald" | "amber" | "violet";
 
 function StatCard({ label, value, hint, tone }: { label: string; value: string; hint: string; tone: Tone }) {
   const tones: Record<Tone, string> = {
-    sky: "from-sky-500/15 to-sky-500/0 border-sky-500/20 text-sky-300",
-    emerald: "from-emerald-500/15 to-emerald-500/0 border-emerald-500/20 text-emerald-300",
-    amber: "from-amber-500/15 to-amber-500/0 border-amber-500/20 text-amber-300",
-    violet: "from-violet-500/15 to-violet-500/0 border-violet-500/20 text-violet-300",
+    sky: "from-sky-500/15 to-sky-500/0 border-sky-500/20",
+    emerald: "from-emerald-500/15 to-emerald-500/0 border-emerald-500/20",
+    amber: "from-amber-500/15 to-amber-500/0 border-amber-500/20",
+    violet: "from-violet-500/15 to-violet-500/0 border-violet-500/20",
   };
   return (
     <div className={`relative overflow-hidden rounded-2xl border bg-gradient-to-br p-5 ${tones[tone]}`}>

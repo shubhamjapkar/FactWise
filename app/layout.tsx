@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Factwise · Product Inventory",
-  description: "Inventory dashboard built with AG Grid (client-side).",
+  title: "Factwise · Employee Directory",
+  description: "Employee directory dashboard built with AG Grid (client-side).",
 };
 
 export default function RootLayout({
